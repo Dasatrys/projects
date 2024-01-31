@@ -1,0 +1,102 @@
+version: '3.1'
+
+services:
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    environment:
+      TZ: "Asia/Novosibirsk"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-conf:/etc/nginx/conf.d
+      - wordpress:/var/www/html
+      - certbot:/etc/letsencrypt
+    networks:
+      - wordpress-network
+    deploy:
+        resources:
+            reservations:
+              cpus: "0.25"
+              memory: "128M"
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  wordpress:
+    depends_on:
+      - mysql
+    image: wordpress:6.4.2-php8.1-fpm-alpine
+    container_name: wordpress
+    restart: always
+#    env_file: ./.env
+    environment:
+      WORDPRESS_DB_HOST: mysql:3306
+      WORDPRESS_DB_USER: *
+      WORDPRESS_DB_PASSWORD: *
+      WORDPRESS_DB_NAME: *
+    expose:
+     - "9000"
+    volumes:
+      - wordpress:/var/www/html
+    networks:
+      - wordpress-network
+    deploy:
+        resources:
+            reservations:
+              cpus: "0.25"
+              memory: "128M"
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    expose:
+      - "3306"
+#    env_file: ./.env
+    environment:
+      MYSQL_DATABASE: *
+      MYSQL_USER: *
+      MYSQL_PASSWORD: *
+      MYSQL_RANDOM_ROOT_PASSWORD: *
+    volumes:
+      - mysql-wordpress:/var/lib/mysql
+    command: '--default-authentication-plugin=mysql_native_password'
+    networks:
+      - wordpress-network
+    deploy:
+        resources:
+            reservations:
+              cpus: "0.5"
+              memory: "256M"
+    logging:
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  certbot:
+    depends_on:
+      - nginx
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - certbot:/etc/letsencrypt
+      - wordpress:/var/www/html
+    command: certonly --webroot --webroot-path=/var/www/html --email * --agree-tos --no-eff-email --force-renewal -d *
+#    command: certonly --webroot --webroot-path=/var/www/html --email * --agree-tos --no-eff-email -d * 
+
+volumes:
+  wordpress:
+  mysql-wordpress:
+  certbot:
+
+networks:
+  wordpress-network:
+    driver: bridge
